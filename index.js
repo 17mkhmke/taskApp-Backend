@@ -4,7 +4,13 @@ const dotenv = require('dotenv');
 const { createConnection } = require('mysql2/promise');
 
 dotenv.config();
-
+// Allow requests from all origins
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
 (async () => {
   // Connect to the MySQL database
   const connection = await createConnection({
