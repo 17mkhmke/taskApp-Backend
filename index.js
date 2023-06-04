@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const { createConnection } = require('mysql2/promise');
 
 dotenv.config();
+
 // Allow requests from all origins
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,6 +12,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   next();
 });
+
 (async () => {
   // Connect to the MySQL database
   const connection = await createConnection({
@@ -39,7 +41,7 @@ app.use((req, res, next) => {
       // Insert the task into the database
       const query = 'INSERT INTO tasks (title, description, dueDate) VALUES (?, ?, ?)';
       const values = [title, description, dueDate];
-      await connection.query(query, values);
+      await connection.execute(query, values);
 
       res.status(201).send({
         message: 'Task created successfully',
@@ -55,7 +57,7 @@ app.use((req, res, next) => {
   app.get('/tasks', async (req, res) => {
     try {
       // Get all tasks from the database
-      const [tasks] = await connection.query('SELECT * FROM tasks');
+      const [tasks] = await connection.execute('SELECT * FROM tasks');
       res.status(200).send(tasks);
     } catch (err) {
       console.error('Error getting tasks:', err);
@@ -68,7 +70,7 @@ app.use((req, res, next) => {
     try {
       // Get the task from the database
       const id = req.params.id;
-      const [task] = await connection.query('SELECT * FROM tasks WHERE id = ?', [id]);
+      const [task] = await connection.execute('SELECT * FROM tasks WHERE id = ?', [id]);
 
       if (task.length === 0) {
         res.sendStatus(404);
@@ -80,52 +82,51 @@ app.use((req, res, next) => {
       res.sendStatus(500);
     }
   });
+// Update a task
+app.put('/tasks/:id', async (req, res) => {
+  try {
+    // Validate the request body
+    const { title, description, dueDate } = req.body;
+    const id = req.params.id;
 
-  // Update a task
-  app.put('/tasks/:id', async (req, res) => {
-    try {
-      // Validate the request body
-      const { title, description, dueDate } = req.body;
+    // Update the task in the database
+    const query = 'UPDATE tasks SET title = ?, description = ?, dueDate = ? WHERE id = ?';
+    const values = [title, description, dueDate, id];
+    const [result] = await connection.execute(query, values);
 
-      // Update the task in the database
-      const id = req.params.id;
-      const query = 'UPDATE tasks SET title = ?, description = ?, dueDate = ? WHERE id = ?';
-      const values = [title, description, dueDate, id];
-      const [result] = await connection.query(query, values);
-
-      if (result.affectedRows === 0) {
-        res.sendStatus(404);
-      } else {
-        res.sendStatus(200);
-      }
-    } catch (err) {
-      console.error('Error updating task:', err);
-      res.sendStatus(500);
+    if (result.affectedRows === 0) {
+      res.sendStatus(404);
+    } else {
+      res.sendStatus(200);
     }
-  });
-
-  // Delete a task
-  app.delete('/tasks/:id', async (req, res) => {
-    try {
-      // Delete the task from the database
-      const id = req.params.id;
-      const query = 'DELETE FROM tasks WHERE id = ?';
-      const values = [id];
-      const [result] = await connection.query(query, values);
-      if (result.affectedRows === 0) {
-        res.sendStatus(404);
-      } else {
-        res.sendStatus(200);
-      }
-    } catch (err) {
-      console.error('Error deleting task:', err);
-      res.sendStatus(500);
+  } catch (err) {
+    console.error('Error updating task:', err);
+    res.sendStatus(500);
+  }
+});
+// Delete a task
+app.delete('/tasks/:id', async (req, res) => {
+  try {
+    // Delete the task from the database
+    const id = req.params.id;
+    const query = 'DELETE FROM tasks WHERE id = ?';
+    const values = [id];
+    const [result] = await connection.execute(query, values);
+    
+    if (result.affectedRows === 0) {
+      res.sendStatus(404);
+    } else {
+      res.sendStatus(200);
     }
-  });
+  } catch (err) {
+    console.error('Error deleting task:', err);
+    res.sendStatus(500);
+  }
+});
 
-  // Start the server
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
+// Start the server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
 })();
