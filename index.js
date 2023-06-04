@@ -1,17 +1,18 @@
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
-const { createConnection } = require('mysql2/promise');
+const { createPool } = require('mysql2/promise');
 
 dotenv.config();
 
 (async () => {
-  // Connect to the MySQL database
-  const connection = await createConnection({
+  // Create a MySQL connection pool
+  const pool = createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
+    database: process.env.DB_DATABASE,
+    connectionLimit: 10, // Adjust the limit as per your requirement
   });
 
   // Middleware for parsing JSON data
@@ -38,10 +39,16 @@ dotenv.config();
         dueDate,
       };
 
+      // Get a connection from the pool
+      const connection = await pool.getConnection();
+
       // Insert the task into the database
       const query = 'INSERT INTO tasks (title, description, dueDate) VALUES (?, ?, ?)';
       const values = [title, description, dueDate];
       await connection.query(query, values);
+
+      // Release the connection back to the pool
+      connection.release();
 
       res.status(201).send({
         message: 'Task created successfully',
@@ -56,9 +63,16 @@ dotenv.config();
   // Get all tasks
   app.get('/tasks', async (req, res) => {
     try {
+      // Get a connection from the pool
+      const connection = await pool.getConnection();
+
       // Get all tasks from the database
       const query = 'SELECT * FROM tasks';
       const [tasks] = await connection.query(query);
+
+      // Release the connection back to the pool
+      connection.release();
+
       res.status(200).send(tasks);
     } catch (err) {
       console.error('Error getting tasks:', err);
@@ -71,8 +85,15 @@ dotenv.config();
     try {
       // Get the task from the database
       const id = req.params.id;
+
+      // Get a connection from the pool
+      const connection = await pool.getConnection();
+
       const query = 'SELECT * FROM tasks WHERE id = ?';
       const [task] = await connection.query(query, [id]);
+
+      // Release the connection back to the pool
+      connection.release();
 
       if (task.length === 0) {
         res.sendStatus(404);
@@ -84,18 +105,23 @@ dotenv.config();
       res.sendStatus(500);
     }
   });
-
   // Update a task
   app.put('/tasks/:id', async (req, res) => {
     try {
       // Validate the request body
       const { title, description, dueDate } = req.body;
+      const id = req.params.id;
+
+      // Get a connection from the pool
+      const connection = await pool.getConnection();
 
       // Update the task in the database
-      const id = req.params.id;
       const query = 'UPDATE tasks SET title = ?, description = ?, dueDate = ? WHERE id = ?';
       const values = [title, description, dueDate, id];
       const [result] = await connection.query(query, values);
+
+      // Release the connection back to the pool
+      connection.release();
 
       if (result.affectedRows === 0) {
         res.sendStatus(404);
@@ -107,29 +133,37 @@ dotenv.config();
       res.sendStatus(500);
     }
   });
-// Delete a task
-app.delete('/tasks/:id', async (req, res) => {
-  try {
-    // Delete the task from the database
-    const id = req.params.id;
-    const query = 'DELETE FROM tasks WHERE id = ?';
-    const values = [id];
-    const [result] = await connection.execute(query, values);
-    
-    if (result.affectedRows === 0) {
-      res.sendStatus(404);
-    } else {
-      res.sendStatus(200);
-    }
-  } catch (err) {
-    console.error('Error deleting task:', err);
-    res.sendStatus(500);
-  }
-});
 
-// Start the server
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+  // Delete a task
+  app.delete('/tasks/:id', async (req, res) => {
+    try {
+      // Get the task ID
+      const id = req.params.id;
+
+      // Get a connection from the pool
+      const connection = await pool.getConnection();
+
+      // Delete the task from the database
+      const query = 'DELETE FROM tasks WHERE id = ?';
+      const [result] = await connection.query(query, [id]);
+
+      // Release the connection back to the pool
+      connection.release();
+
+      if (result.affectedRows === 0) {
+        res.sendStatus(404);
+      } else {
+        res.sendStatus(200);
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      res.sendStatus(500);
+    }
+  });
+
+  // Start the server
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
 })();
